@@ -1,3 +1,6 @@
+
+python3 -m venv .venv
+source .venv/bin/activate
 # Robinhood User Churn
 Reproducible analysis of user churn, prediction of churn probabilities, and identification of associated user behaviors.
 

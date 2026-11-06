@@ -1,6 +1,7 @@
 
 python3 -m venv .venv
 source .venv/bin/activate
+python -m pip install pandas numpy matplotlib seaborn ipykernel
 # Robinhood User Churn
 Reproducible analysis of user churn, prediction of churn probabilities, and identification of associated user behaviors.
 

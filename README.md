@@ -1,69 +1,66 @@
-
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install pandas numpy matplotlib seaborn ipykernel
-
-python -m pip install notebook
-python -m notebook notebooks/01_data_audit.ipynb
 # Robinhood User Churn
-Reproducible analysis of user churn, prediction of churn probabilities, and identification of associated user behaviors.
 
-**Status:** Project setup. Dataset inspection and implementation are pending. No results or model performance claims are available yet.
-
-## Business objective
-Support retention decisions by answering:
-1. What percentage of users in the data have churned?
-2. Can future churn be predicted, and how well does the model perform?
-3. Which features are most associated with churn?
-
-This is an independent educational case study, not an official Robinhood product or analysis. Dataset provenance will be documented after inspection.
+This project estimates historical churn, evaluates a classifier for retention outreach, and ranks the features that contribute to its performance.
 
 ## Churn definition
-A user has churned when their equity value stays below $10 for at least 28 consecutive calendar days, having previously been at least $10.
 
-Exactly $10 satisfies the prior-equity condition but does not count as below $10. Calendar days must not be replaced with row counts without verifying daily coverage.
+Churn means equity below $10 for at least 28 consecutive calendar days after previously reaching $10. The equity panel records dates at or above $10. We used gaps after each user's first recorded appearance as a proxy for below-threshold equity. The panel has no weekend observations, so gaps can also reflect the reporting calendar.
 
-### Decisions to resolve from the data
-- Observation frequency, gaps, duplicate user-date records, and timezone.
-- Whether missing dates represent unobserved equity or a documented reporting convention.
-- Eligibility of users who never reach $10.
-- Incomplete follow-up and outcomes that cannot be determined.
-- First churn event, subsequent recovery, and the analysis period.
-- Denominator for the requested all-user percentage versus an eligible-user rate.
-- Prediction date, feature history, outcome horizon, and split strategy.
+| Labeling rule | Users labeled churned | Rate |
+| --- | ---: | ---: |
+| Qualifying gaps between recorded appearances | 275 of 5,584 | 4.92% |
+| Also include trailing gaps that reached 28 days by August 18, 2017 (primary) | 1,005 of 5,584 | 18.00% |
 
-Assumptions will be recorded explicitly and sensitivity analysis used where alternatives are defensible. Low equity is the supplied churn proxy; it does not by itself prove a withdrawal.
+The trailing-gap rule adds 730 users, or 13.07 percentage points using unrounded rates. Shorter trailing gaps have unresolved outcomes beyond the observation window.
 
-## Implementation roadmap
-| Stage | Deliverable |
-| --- | --- |
-| Data audit | Schema, date coverage, missingness, duplicates, data dictionary |
-| Labeling | Documented rules, edge-case tests, per-user labels |
-| Descriptive analysis | Churn counts, rates, population definitions, exclusions |
-| Prediction design | Historical feature window, future outcome window, leakage controls |
-| Modeling | Simple baseline, logistic regression, tree-based comparison |
-| Evaluation | Held-out discrimination, probability quality, threshold tradeoffs |
-| Interpretation | Feature associations, limitations, retention hypotheses |
-| Reproducibility | Reusable scripts, dependencies, tests, execution instructions |
+## Modeling and results
 
-Model selection and threshold tuning will use training/validation data only. The final test set will remain untouched until final evaluation. Preprocessing will be fitted on training data only. Repeated users and overlapping outcome windows will be considered when designing splits.
+We used a stratified 80/20 user split and five-fold stratified cross-validation for tuning. We one-hot encoded categorical inputs within each fold and scaled numeric inputs for logistic regression. The tuned random forest achieved mean validation average precision (AP) of 0.3130 versus 0.2811 for tuned logistic regression. The selected forest used depth 5, a minimum of 20 samples per leaf, and no class weighting or oversampling.
 
-## Project layout
-- `docs/`: requirements, assumptions, and methodology.
-- `data/`: local data placement guidance; datasets are not committed.
-- `notebooks/`: explanatory exploration, to be added after data inspection.
-- `src/`: reusable audit, labeling, feature, training, and evaluation code, to be added.
-- `tests/`: labeling and pipeline checks, to be added.
-- `reports/`: generated analysis and figures, to be added.
+For an illustrative low-cost in-app reminder, we selected a score cutoff of 0.175 using out-of-fold training scores. It caught 66.5% of development churners and flagged 46.6% of users. A cutoff of 0.150 had higher F2 (0.529 versus 0.505) and flagged 64.2% of users.
 
-## Getting started
-Implementation commands and dependency versions will be added once the dataset format has been inspected. This repository does not yet contain an executable analysis.
+| Held-out metric | Majority-class baseline | Random forest at 0.175 |
+| --- | ---: | ---: |
+| Average precision | 0.180 | 0.315 |
+| Precision | Undefined (zero flagged) | 26.1% |
+| Recall | 0.0% | 69.2% |
+| F2 | 0.000 | 0.520 |
+| Accuracy | 82.0% | 59.3% |
+| Users flagged | 0 of 1,117 | 532 of 1,117 (47.6%) |
 
-Next step: obtain the supplied dataset and accompanying data documentation, then complete the audit before implementing churn labels.
+The forest flagged 139 churners and 393 non-churners. It missed 62 churners and left 523 non-churners unflagged.
 
-## Expected outputs
-- Re-runnable churn labeling and a documented churn-rate calculation.
-- Churn probabilities for the defined scoring population.
-- Model comparison with clearly stated evaluation windows.
-- Feature rankings, limitations, and business recommendations.
-- Instructions that allow another analyst to reproduce the work.
+## Feature importance
+
+We shuffled each original input 30 times on the held-out set and ranked features by the mean drop in AP.
+
+| Feature | Mean AP drop |
+| --- | ---: |
+| First deposit amount | 0.0499 |
+| Risk tolerance | 0.0441 |
+| Time spent | 0.0236 |
+| Liquidity needs | 0.0232 |
+| Platform | 0.0051 |
+| First instrument traded | 0.0046 |
+| Investment experience | 0.0036 |
+| Time horizon | −0.0027 |
+
+The ranking measures how the fitted model relies on its inputs. Establishing causal effects requires a separate study.
+
+## Recommendation
+
+Before a retention pilot, define the scoring date and outcome window, verify that all features, especially time spent, are available at scoring time, and validate the model on a later cohort. If the ranking and outreach volume are suitable, randomly assign flagged users to reminder and control groups to measure the effect on churn.
+
+## Run the analysis
+
+1. Place the supplied `features_data.csv` and `equity_value_data.csv` in `data/`. Keep both CSVs and user-level outputs outside Git.
+2. From the repository root, create an environment with Python 3.11 and start Jupyter.
+
+   ```bash
+   python3.11 -m venv .venv
+   source .venv/bin/activate
+   python -m pip install notebook ipykernel pandas numpy matplotlib scikit-learn
+   python -m notebook
+   ```
+
+3. Open [the analysis notebook](notebooks/01_data_audit.ipynb) and run all cells in order. Compare the churn counts, test metrics, and feature ranking with the results above.
